@@ -1,0 +1,156 @@
+groups: 
+- name: GlobalMetrics
+  rules:
+  #node_alerts
+
+  - alert: Instance High Memory Usage
+    expr: 100 - ( avg(node_memory_MemAvailable_bytes{job="node-exporter"}) by (instance) / avg(node_memory_MemTotal_bytes{job="node-exporter"}) by (instance) * 100 ) > 80
+    for: 5m
+    labels:
+      severity: page
+    annotations:
+      summary: Instance High Memory Usage (instance {{ $labels.instance }})
+
+
+  - alert: Instance High CPU Usage
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: page
+    annotations:
+      summary: Instance High CPU Usage (instance {{ $labels.instance }})
+
+  - alert: Host Out Of DiskSpace
+    expr: (node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes < 10 and ON (instance, device, mountpoint) node_filesystem_readonly == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host out of disk space (instance {{ $labels.instance }})
+      description: "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: Host Unusual NetworkT hroughput In
+    expr: sum by (instance) (rate(node_network_receive_bytes_total[2m])) / 1024 / 1024 > 100
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host unusual network throughput in (instance {{ $labels.instance }})
+      description: "Host network interfaces are probably receiving too much data (> 100 MB/s)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: unusual network throughput out
+    expr: sum by (instance) (rate(node_network_transmit_bytes_total[2m])) / 1024 / 1024 > 100
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Host unusual network throughput out (instance {{ $labels.instance }})
+      description: "Host network interfaces are probably sending too much data (> 100 MB/s)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  #kubernetes
+
+  - alert: Kubernetes NodeReady
+    expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: Kubernetes Node ready (node {{ $labels.node }})
+      description: "Node {{ $labels.node }} has been unready for a long time\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+
+  - alert: Kubernetes Persistentvolumeclaim Pending
+    expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Kubernetes PersistentVolumeClaim pending ({{ $labels.persistentvolumeclaim }})
+      description: "PersistentVolumeClaim {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is pending\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: Kubernetes Volume Out Of Disk Space
+    expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 < 10
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Kubernetes Volume out of disk space (persistentvolumeclaim {{ $labels.persistentvolumeclaim}})
+      description: "Volume is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+
+
+  
+  #pods_Containers_alerts
+
+  - alert: Pod CrashLooping
+    expr: increase(kube_pod_container_status_restarts_total[1m]) > 3
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Kubernetes pod crash looping (instance {{ $labels.instance }})
+      description: "Pod {{ $labels.pod }} is crash looping\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: Container CpuUsage
+    expr: (sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) BY (instance, name) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Container CPU usage (name {{ $labels.name }})
+      description: "Container CPU usage is above 80%\n 10 VALUE = {{ $value }}\n LABELS = {{ $labels }}"
+
+   - alert: Container MemoryUsage
+    expr: (sum(container_memory_working_set_bytes{name!=""}) BY (instance, name) / sum(container_spec_memory_limit_bytes > 0) BY (instance, name) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Container Memory usage (name {{ $labels.name }})
+      description: "Container Memory usage is above 80%\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: Container VolumeUsage
+    expr: (1 - (sum(container_fs_inodes_free{name!=""}) BY (instance) / sum(container_fs_inodes_total) BY (instance))) * 100 > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Container Volume usage (instance {{ $labels.instance }})
+      description: "Container Volume usage is above 80%\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+
+  ##Status failed
+
+  - alert: Pods Failures
+    expr: sum(kube_pod_status_phase{phase="Failed"}) by (pod) == 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Pod {{ $labels.pod }} Failed 
+
+  - alert: Deployment failed
+    expr: sum(kube_deployment_status_replicas_unavailable) by(deployment) == 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Deployment {{ $labels.deployment }} failed 
+  
+  - alert: StatefulSet failed
+    expr: kube_statefulset_status_replicas == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: StatefulSet {{ $labels.statefulset }} failed
+  
+  - alert: Daemonset failed
+    expr: sum(kube_daemonset_status_number_unavailable) by(daemonset) == 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: DaemonSet {{ $labels.daemonset }} failed  
+
+ 
